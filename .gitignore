@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 
+# Superpowers brainstorm artifacts
+.superpowers/
+
 # Dependencies
 node_modules/
 
