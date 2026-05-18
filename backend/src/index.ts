@@ -6,7 +6,7 @@ import { startJobWorker } from './workers/jobWorker.js';
 
 dotenv.config();
 
-const PORT = process.env.PORT ?? 5000;
+const PORT = process.env.PORT ?? 5001;
 
 async function main() {
   await ensureBucketExists();
