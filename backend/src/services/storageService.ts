@@ -19,16 +19,24 @@ function buildS3Client(): S3Client {
   });
 }
 
-const s3 = buildS3Client();
-const BUCKET = process.env.S3_BUCKET ?? 'songs';
+let _s3: S3Client | null = null;
+function getS3(): S3Client {
+  if (!_s3) _s3 = buildS3Client();
+  return _s3;
+}
+
+function getBucket(): string {
+  return process.env.S3_BUCKET ?? 'songs';
+}
 
 export async function ensureBucketExists(): Promise<void> {
+  const s3 = getS3();
+  const BUCKET = getBucket();
   try {
     await s3.send(new HeadBucketCommand({ Bucket: BUCKET }));
   } catch (headErr: unknown) {
     const name = (headErr as { name?: string }).name;
     if (name !== 'NoSuchBucket' && name !== 'NotFound' && name !== '404') {
-      // Bucket may exist but we lack permission to HEAD it — proceed
       logger.warn({ err: headErr }, 'HeadBucket check failed; assuming bucket exists');
       return;
     }
@@ -43,7 +51,6 @@ export async function ensureBucketExists(): Promise<void> {
       ) {
         throw createErr;
       }
-      // Another instance already created it — fine
     }
   }
 }
@@ -54,9 +61,9 @@ export async function uploadFile(
   contentType: string
 ): Promise<void> {
   try {
-    await s3.send(
+    await getS3().send(
       new PutObjectCommand({
-        Bucket: BUCKET,
+        Bucket: getBucket(),
         Key: key,
         Body: buffer,
         ContentType: contentType,
@@ -70,7 +77,7 @@ export async function uploadFile(
 
 export async function deleteFile(key: string): Promise<void> {
   try {
-    await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+    await getS3().send(new DeleteObjectCommand({ Bucket: getBucket(), Key: key }));
   } catch (err) {
     logger.error({ key, err }, 'Failed to delete file from S3');
     throw err;
