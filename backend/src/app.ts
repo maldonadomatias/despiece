@@ -1,4 +1,4 @@
-import express, { Express } from 'express';
+import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { errorHandler } from './utils/errorHandler.js';
@@ -45,6 +45,19 @@ app.get('/api/health', (req, res) => {
 
 // API routes
 app.use('/api/songs', songsRouter);
+
+// Handle multer file-upload errors before the generic error handler
+app.use((err: Error & { code?: string }, _req: Request, res: Response, next: NextFunction) => {
+  if (
+    err.constructor?.name === 'MulterError' ||
+    err.code === 'LIMIT_FILE_SIZE' ||
+    err.message?.startsWith('Only mp3')
+  ) {
+    res.status(400).json({ error: err.message ?? 'File upload error' });
+    return;
+  }
+  next(err);
+});
 
 // Error handler (must be last)
 app.use(errorHandler);

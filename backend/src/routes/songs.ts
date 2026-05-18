@@ -108,21 +108,5 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
   }
 });
 
-// Handle multer errors (file too large, wrong type)
-router.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
-  if (
-    err.message?.includes('File too large') ||
-    (err as { code?: string }).code === 'LIMIT_FILE_SIZE' ||
-    err.constructor?.name === 'MulterError'
-  ) {
-    res.status(400).json({ error: `File too large (max ${MAX_BYTES / 1024 / 1024} MB)` });
-    return;
-  }
-  if (err.message?.includes('Only mp3')) {
-    res.status(400).json({ error: err.message });
-    return;
-  }
-  next(err);
-});
 
 export default router;

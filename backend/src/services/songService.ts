@@ -43,7 +43,9 @@ export async function createJob(songId: string): Promise<string> {
     `INSERT INTO song_jobs (song_id) VALUES ($1) RETURNING id`,
     [songId]
   );
-  return rows[0].id;
+  const jobId = rows[0]?.id;
+  if (!jobId) throw new Error(`Failed to create job for song ${songId}`);
+  return jobId;
 }
 
 export async function deleteSong(id: string): Promise<string | null> {
