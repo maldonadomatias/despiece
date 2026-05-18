@@ -10,6 +10,7 @@ services:
       - '3000:3000'
     environment:
       - VITE_API_URL=http://localhost:5001/api
+
   backend:
     build:
       context: ./backend
@@ -17,12 +18,39 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
-      - ./backend/uploads:/app/uploads
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgres://user:password@postgres:5432/mydb
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - S3_BUCKET=songs
+      - S3_REGION=us-east-1
+      - AUDIO_SERVICE_URL=http://audio-service:8000
     ports:
       - '5001:5000'
+
+  audio-service:
+    build:
+      context: ./audio-service
+      dockerfile: Dockerfile
+    volumes:
+      - demucs-models:/root/.cache/torch
+    environment:
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - S3_BUCKET=songs
+      - S3_REGION=us-east-1
+
   postgres:
     ports:
       - '5433:5432'
+
+  minio:
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+
+volumes:
+  demucs-models:

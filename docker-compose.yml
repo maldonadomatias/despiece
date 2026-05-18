@@ -13,12 +13,15 @@ services:
       - VITE_API_URL=/api
       - BACKEND_URL=http://backend:5000
       - BACKEND_DOMAIN=localhost
+
   backend:
     build: ./backend
     ports:
       - '5001:5000'
     depends_on:
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     env_file:
       - ./backend/.env
@@ -28,14 +31,57 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgres://user:password@postgres:5432/mydb}
       - FRONTEND_URL=http://localhost:3000
       - LOG_LEVEL=info
-    volumes:
-      - ./backend/uploads:/app/uploads
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - S3_BUCKET=songs
+      - S3_REGION=us-east-1
+      - AUDIO_SERVICE_URL=http://audio-service:8000
     healthcheck:
       test: ['CMD', 'node', '-e', "require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  audio-service:
+    build: ./audio-service
+    ports:
+      - '8000:8000'
+    environment:
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - S3_BUCKET=songs
+      - S3_REGION=us-east-1
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ':9001'
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   postgres:
     image: postgres:15-alpine
     environment:
@@ -55,3 +101,4 @@ services:
 
 volumes:
   postgres-data:
+  minio-data:
