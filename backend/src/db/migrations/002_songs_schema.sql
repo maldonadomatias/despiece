@@ -37,3 +37,6 @@ CREATE TABLE IF NOT EXISTS song_analysis (
 );
 
 CREATE INDEX IF NOT EXISTS idx_song_analysis_song_id ON song_analysis(song_id);
+
+CREATE INDEX IF NOT EXISTS idx_songs_status ON songs(status);
+CREATE INDEX IF NOT EXISTS idx_song_jobs_song_id ON song_jobs(song_id);

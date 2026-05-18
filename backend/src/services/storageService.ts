@@ -15,7 +15,7 @@ function buildS3Client(): S3Client {
       accessKeyId: process.env.S3_ACCESS_KEY!,
       secretAccessKey: process.env.S3_SECRET_KEY!,
     },
-    forcePathStyle: true, // required for MinIO
+    forcePathStyle: true,
   });
 }
 
@@ -25,9 +25,26 @@ const BUCKET = process.env.S3_BUCKET ?? 'songs';
 export async function ensureBucketExists(): Promise<void> {
   try {
     await s3.send(new HeadBucketCommand({ Bucket: BUCKET }));
-  } catch {
-    await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
-    logger.info({ bucket: BUCKET }, 'Created S3 bucket');
+  } catch (headErr: unknown) {
+    const name = (headErr as { name?: string }).name;
+    if (name !== 'NoSuchBucket' && name !== 'NotFound' && name !== '404') {
+      // Bucket may exist but we lack permission to HEAD it — proceed
+      logger.warn({ err: headErr }, 'HeadBucket check failed; assuming bucket exists');
+      return;
+    }
+    try {
+      await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
+      logger.info({ bucket: BUCKET }, 'Created S3 bucket');
+    } catch (createErr: unknown) {
+      const createName = (createErr as { name?: string }).name;
+      if (
+        createName !== 'BucketAlreadyOwnedByYou' &&
+        createName !== 'BucketAlreadyExists'
+      ) {
+        throw createErr;
+      }
+      // Another instance already created it — fine
+    }
   }
 }
 
@@ -36,16 +53,26 @@ export async function uploadFile(
   buffer: Buffer,
   contentType: string
 ): Promise<void> {
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: key,
-      Body: buffer,
-      ContentType: contentType,
-    })
-  );
+  try {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      })
+    );
+  } catch (err) {
+    logger.error({ key, err }, 'Failed to upload file to S3');
+    throw err;
+  }
 }
 
 export async function deleteFile(key: string): Promise<void> {
-  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+  } catch (err) {
+    logger.error({ key, err }, 'Failed to delete file from S3');
+    throw err;
+  }
 }
