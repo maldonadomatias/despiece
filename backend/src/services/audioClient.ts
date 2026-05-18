@@ -1,30 +1,32 @@
+import { Agent } from 'undici';
 import { AnalysisResult } from '../domain/song.js';
 
 const AUDIO_SERVICE_URL =
   process.env.AUDIO_SERVICE_URL ?? 'http://localhost:8000';
 
-// Demucs on CPU can take 5-15 min for a typical song
+// Demucs on CPU can take 5-15 min for a typical song.
+// undici's default headersTimeout is 5 min, which trips long Demucs jobs.
 const ANALYZE_TIMEOUT_MS = 30 * 60 * 1000;
 
+const longTimeoutAgent = new Agent({
+  headersTimeout: ANALYZE_TIMEOUT_MS,
+  bodyTimeout: ANALYZE_TIMEOUT_MS,
+  keepAliveTimeout: ANALYZE_TIMEOUT_MS,
+});
+
 export async function analyzeAudio(storageKey: string): Promise<AnalysisResult> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
+  const res = await fetch(`${AUDIO_SERVICE_URL}/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ storage_key: storageKey }),
+    // @ts-expect-error — undici-specific option, not in standard fetch types
+    dispatcher: longTimeoutAgent,
+  });
 
-  try {
-    const res = await fetch(`${AUDIO_SERVICE_URL}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ storage_key: storageKey }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => 'unknown error');
-      throw new Error(`Audio service error ${res.status}: ${text}`);
-    }
-
-    return (await res.json()) as AnalysisResult;
-  } finally {
-    clearTimeout(timer);
+  if (!res.ok) {
+    const text = await res.text().catch(() => 'unknown error');
+    throw new Error(`Audio service error ${res.status}: ${text}`);
   }
+
+  return (await res.json()) as AnalysisResult;
 }
