@@ -1,11 +1,8 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { errorHandler } from './utils/errorHandler.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import songsRouter from './routes/songs.js';
 
 const app: Express = express();
 
@@ -46,8 +43,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API routes (add your routes here)
-// app.use('/api/example', exampleRoutes);
+// API routes
+app.use('/api/songs', songsRouter);
 
 // Error handler (must be last)
 app.use(errorHandler);
