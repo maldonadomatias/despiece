@@ -36,12 +36,16 @@ services:
       dockerfile: Dockerfile
     volumes:
       - demucs-models:/root/.cache/torch
+      - ./audio-service/src:/app/src
     environment:
       - S3_ENDPOINT=http://minio:9000
       - S3_ACCESS_KEY=minioadmin
       - S3_SECRET_KEY=minioadmin
       - S3_BUCKET=songs
       - S3_REGION=us-east-1
+    command: ['uvicorn', 'src.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload']
+    ports:
+      - '8000:8000'
 
   postgres:
     ports:
