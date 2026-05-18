@@ -33,6 +33,7 @@ async function processNextJob(): Promise<void> {
 
     if (rows.length === 0) {
       await client.query('COMMIT');
+      client.release();
       return;
     }
 
