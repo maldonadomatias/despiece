@@ -24,8 +24,9 @@ export interface AnalysisResult {
   key: string;
   duration_sec: number;
   beat_grid: number[];
+  bar_grid: number[];
   sections: Section[];
-  stems: Record<string, StemData>;
+  stems: Record<string, StemAnalysis>;
 }
 
 export interface Section {
@@ -34,6 +35,13 @@ export interface Section {
   end_sec: number;
 }
 
-export interface StemData {
-  envelope: [number, number][]; // [time_sec, energy_0_1]
+export interface StemAnalysis {
+  audio_key: string | null;
+  regions: StemRegion[];
+}
+
+export interface StemRegion {
+  start_sec: number;
+  end_sec: number;
+  envelope: [number, number][]; // [t_relative_sec, energy_0_1]
 }
