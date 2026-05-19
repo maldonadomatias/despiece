@@ -28,12 +28,12 @@ describe('SongTimeline', () => {
     const old = { ...baseAnalysis(1) } as any;
     delete old.analysis_version;
     render(<SongTimeline songId="abc" analysis={old} />);
-    expect(screen.getByText(/re-analyze/i)).toBeInTheDocument();
+    expect(screen.getByText(/older pipeline/i)).toBeInTheDocument();
   });
 
   it('renders timeline when analysis_version >= 2', () => {
     render(<SongTimeline songId="abc" analysis={baseAnalysis(2)} />);
-    expect(screen.queryByText(/re-analyze/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/older pipeline/i)).not.toBeInTheDocument();
   });
 
   it('renders the sub-label legend when at least one other region has sub_label', () => {

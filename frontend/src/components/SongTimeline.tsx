@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AnalysisResult, SubLabel } from '@/types/song';
+import { AnalysisResult, DrumHitClass, DrumHits, SubLabel } from '@/types/song';
 import { StemTrack } from './StemTrack';
 import { SectionBar } from './SectionBar';
 import { TimeAxis } from './TimeAxis';
@@ -28,11 +28,20 @@ const SUB_LABEL_COLORS: Record<SubLabel, string> = {
   other_misc: '#94a3b8',
 };
 
+const DRUM_HIT_COLORS: Record<DrumHitClass, string> = {
+  kick:    '#dc2626',
+  snare:   '#facc15',
+  hihat:   '#22d3ee',
+  cymbal:  '#a3e635',
+  unknown: '#64748b',
+};
+
 const ROW_HEIGHT = 48;
 const SECTION_HEIGHT = 28;
 const AXIS_HEIGHT = 24;
 const LABEL_WIDTH = 96;
-const REQUIRED_ANALYSIS_VERSION = 2;
+const SUPPORTED_ANALYSIS_VERSION = 2;
+const PREFERRED_ANALYSIS_VERSION = 3;
 
 interface Props {
   songId: string;
@@ -69,7 +78,16 @@ export function SongTimeline({ songId, analysis }: Props) {
     return Array.from(set);
   }, [analysis.stems]);
 
-  if ((analysis.analysis_version ?? 1) < REQUIRED_ANALYSIS_VERSION) {
+  const activeDrumHitClasses = useMemo<DrumHitClass[]>(() => {
+    const drums = analysis.stems['drums'];
+    const hits: DrumHits | undefined = drums?.hits;
+    if (!hits) return [];
+    const order: DrumHitClass[] = ['kick', 'snare', 'hihat', 'cymbal', 'unknown'];
+    return order.filter((cls) => hits[cls].length > 0);
+  }, [analysis.stems]);
+
+  const version = analysis.analysis_version ?? 1;
+  if (version < SUPPORTED_ANALYSIS_VERSION) {
     return (
       <div className="p-6 border rounded bg-muted/20 text-sm">
         <p className="font-medium mb-1">This song was analyzed with an older pipeline.</p>
@@ -79,6 +97,7 @@ export function SongTimeline({ songId, analysis }: Props) {
       </div>
     );
   }
+  const showV3Notice = version < PREFERRED_ANALYSIS_VERSION;
 
   function toggleSolo(name: string) {
     setSoloed((prev) => {
@@ -112,6 +131,12 @@ export function SongTimeline({ songId, analysis }: Props) {
 
   return (
     <div className="space-y-4">
+      {showV3Notice && (
+        <div className="p-3 border rounded bg-amber-50 text-xs text-amber-900">
+          Drum sub-rows are available — re-analyze to see kick / snare / hi-hat / cymbal per hit.
+        </div>
+      )}
+
       {activeStems.map((name) => (
         <audio
           key={name}
@@ -171,6 +196,7 @@ export function SongTimeline({ songId, analysis }: Props) {
               labelWidth={LABEL_WIDTH}
               rowHeight={ROW_HEIGHT}
               subLabelColors={SUB_LABEL_COLORS}
+              drumHitColors={DRUM_HIT_COLORS}
             />
           ))}
 
@@ -216,6 +242,21 @@ export function SongTimeline({ songId, analysis }: Props) {
                 style={{ background: SUB_LABEL_COLORS[sub] }}
               />
               {sub}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {activeDrumHitClasses.length > 0 && (
+        <div className="flex gap-4 flex-wrap text-xs text-muted-foreground">
+          <span className="font-medium">Drum hits:</span>
+          {activeDrumHitClasses.map((cls) => (
+            <span key={cls} className="flex items-center gap-1">
+              <span
+                className="inline-block w-3 h-3 rounded-sm"
+                style={{ background: DRUM_HIT_COLORS[cls] }}
+              />
+              {cls}
             </span>
           ))}
         </div>
