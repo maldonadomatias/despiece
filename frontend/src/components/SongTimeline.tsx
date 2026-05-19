@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AnalysisResult } from '@/types/song';
+import { AnalysisResult, SubLabel } from '@/types/song';
 import { StemTrack } from './StemTrack';
 import { SectionBar } from './SectionBar';
 import { TimeAxis } from './TimeAxis';
@@ -19,10 +19,20 @@ const STEM_COLORS: Record<string, string> = {
   other:  '#94a3b8',
 };
 
+const SUB_LABEL_COLORS: Record<SubLabel, string> = {
+  lead:       '#ef4444',
+  pad:        '#8b5cf6',
+  synth:      '#ec4899',
+  strings:    '#f97316',
+  fx:         '#14b8a6',
+  other_misc: '#94a3b8',
+};
+
 const ROW_HEIGHT = 48;
 const SECTION_HEIGHT = 28;
 const AXIS_HEIGHT = 24;
 const LABEL_WIDTH = 96;
+const REQUIRED_ANALYSIS_VERSION = 2;
 
 interface Props {
   songId: string;
@@ -48,6 +58,27 @@ export function SongTimeline({ songId, analysis }: Props) {
       ),
     [analysis.stems]
   );
+
+  const otherSubLabels = useMemo<SubLabel[]>(() => {
+    const other = analysis.stems['other'];
+    if (!other) return [];
+    const set = new Set<SubLabel>();
+    for (const r of other.regions) {
+      if (r.sub_label) set.add(r.sub_label);
+    }
+    return Array.from(set);
+  }, [analysis.stems]);
+
+  if ((analysis.analysis_version ?? 1) < REQUIRED_ANALYSIS_VERSION) {
+    return (
+      <div className="p-6 border rounded bg-muted/20 text-sm">
+        <p className="font-medium mb-1">This song was analyzed with an older pipeline.</p>
+        <p className="text-muted-foreground">
+          Re-analyze it to get pro-grade stems and "other"-stem sub-labels.
+        </p>
+      </div>
+    );
+  }
 
   function toggleSolo(name: string) {
     setSoloed((prev) => {
@@ -139,6 +170,7 @@ export function SongTimeline({ songId, analysis }: Props) {
               onRegionClick={handleRegionClick}
               labelWidth={LABEL_WIDTH}
               rowHeight={ROW_HEIGHT}
+              subLabelColors={SUB_LABEL_COLORS}
             />
           ))}
 
@@ -173,6 +205,21 @@ export function SongTimeline({ songId, analysis }: Props) {
           </span>
         ))}
       </div>
+
+      {otherSubLabels.length > 0 && (
+        <div className="flex gap-4 flex-wrap text-xs text-muted-foreground">
+          <span className="font-medium">Sub-labels:</span>
+          {otherSubLabels.map((sub) => (
+            <span key={sub} className="flex items-center gap-1">
+              <span
+                className="inline-block w-3 h-3 rounded-sm"
+                style={{ background: SUB_LABEL_COLORS[sub] }}
+              />
+              {sub}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
