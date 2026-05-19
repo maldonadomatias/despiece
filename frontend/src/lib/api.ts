@@ -29,3 +29,11 @@ export async function listSongs(): Promise<Song[]> {
 export async function deleteSong(id: string): Promise<void> {
   await http.delete(`/songs/${id}`);
 }
+
+export function getMixAudioUrl(songId: string): string {
+  return `${apiBase}/songs/${songId}/audio`;
+}
+
+export function getStemAudioUrl(songId: string, stem: string): string {
+  return `${apiBase}/songs/${songId}/stems/${stem}`;
+}
