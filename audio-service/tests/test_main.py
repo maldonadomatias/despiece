@@ -43,7 +43,7 @@ def test_analyze_returns_stems(client, dummy_wav, sample_audio):
          patch("src.main.encode_mp3"), \
          patch("src.main.upload_from_path"), \
          patch("src.main.detect_regions", return_value=[]):
-        res = client.post("/analyze", json={"storage_key": "songs/test.wav"})
+        res = client.post("/analyze", json={"storage_key": "songs/test.wav", "song_id": "song-1234"})
 
     assert res.status_code == 200
     body = res.json()
@@ -53,6 +53,9 @@ def test_analyze_returns_stems(client, dummy_wav, sample_audio):
     assert body["key"] != "unknown"
     assert all("audio_key" in v for v in body["stems"].values())
     assert all("regions" in v for v in body["stems"].values())
+    # Stem keys must be built from song_id (postgres row id), not from storage_key uuid
+    for stem_name, stem_data in body["stems"].items():
+        assert stem_data["audio_key"] == f"songs/song-1234/stems/{stem_name}.mp3"
     assert isinstance(body["beat_grid"], list)
     assert isinstance(body["bar_grid"], list)
     assert isinstance(body["sections"], list)

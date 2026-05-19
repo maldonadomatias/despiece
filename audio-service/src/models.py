@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class AnalyzeRequest(BaseModel):
     storage_key: str = Field(..., min_length=1, max_length=1024)
+    song_id: str = Field(..., min_length=1, max_length=256)
 
 
 class AnalysisResult(BaseModel):

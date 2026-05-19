@@ -26,7 +26,7 @@ async def health():
 @app.post("/analyze")
 def analyze(req: AnalyzeRequest):
     storage_key = req.storage_key
-    song_id = _song_id_from_storage_key(storage_key)
+    song_id = req.song_id
 
     with tempfile.TemporaryDirectory() as tmpdir:
         input_path = os.path.join(tmpdir, "input.audio")
@@ -93,12 +93,6 @@ def analyze(req: AnalyzeRequest):
             "sections": sections,
             "stems": stems,
         }
-
-
-def _song_id_from_storage_key(storage_key: str) -> str:
-    """`songs/<uuid>.<ext>` → `<uuid>`. Falls back to base name without extension."""
-    base = os.path.basename(storage_key)
-    return os.path.splitext(base)[0]
 
 
 def _bar_grid_from_beats(beat_times, beats_per_bar, audio_duration):

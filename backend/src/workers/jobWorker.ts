@@ -58,7 +58,7 @@ async function processNextJob(): Promise<void> {
 
   try {
     logger.info({ jobId, songId }, 'Processing audio job');
-    const result = await analyzeAudio(storageKey!);
+    const result = await analyzeAudio(songId!, storageKey!);
 
     await pool.query(
       `INSERT INTO song_analysis (song_id, result_json) VALUES ($1, $2)
