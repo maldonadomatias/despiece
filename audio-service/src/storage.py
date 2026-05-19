@@ -29,3 +29,11 @@ def download_to_path(storage_key: str, dest_path: str) -> None:
         raise EnvironmentError("Missing required env var: S3_BUCKET")
     client = get_s3_client()
     client.download_file(bucket, storage_key, dest_path)
+
+
+def upload_from_path(local_path: str, storage_key: str) -> None:
+    bucket = os.environ.get("S3_BUCKET")
+    if not bucket:
+        raise EnvironmentError("Missing required env var: S3_BUCKET")
+    client = get_s3_client()
+    client.upload_file(local_path, bucket, storage_key)
