@@ -10,8 +10,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download Demucs htdemucs_6s model so it's cached in the image layer
-RUN python -c "from demucs.pretrained import get_model; get_model('htdemucs_6s')" || true
+COPY scripts/ ./scripts/
+
+# Pre-pull all model weights so the running container never blocks on a first-run download.
+RUN python scripts/prefetch_models.py || true
 
 COPY src/ ./src/
 
