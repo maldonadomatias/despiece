@@ -125,8 +125,29 @@ def _extract_features(
 
 
 def _classify(f: _OnsetFeatures) -> tuple[str, float]:
-    """Stubbed in Task 2 — always returns ('unknown', 0.0). Task 3 replaces."""
-    return ("unknown", 0.0)
+    """Rule-based 5-class cascade. Returns (label, confidence in [0, 1])."""
+    low_e = f["low_energy"]
+    mid_e = f["mid_energy"]
+    hi_e = f["hi_energy"]
+    centroid = f["centroid"]
+    zcr = f["zcr"]
+    decay_ms = f["decay_ms"]
+
+    if low_e > KICK_LOW_THRESHOLD:
+        return ("kick", float(min(1.0, low_e)))
+
+    if mid_e > SNARE_MID_THRESHOLD and centroid < 4000:
+        return ("snare", float(min(1.0, mid_e)))
+
+    if hi_e > HIHAT_HI_THRESHOLD and zcr > 0.15 and decay_ms < CYMBAL_DECAY_MS:
+        return ("hihat", float(min(1.0, hi_e * zcr / 0.15)))
+
+    if hi_e > 0.3 and decay_ms >= CYMBAL_DECAY_MS:
+        return ("cymbal", float(min(1.0, hi_e * (decay_ms / 200.0))))
+
+    unknown_conf = float(1.0 - max(low_e, mid_e, hi_e))
+    unknown_conf = float(min(1.0, max(0.0, unknown_conf)))
+    return ("unknown", unknown_conf)
 
 
 def _apply_confidence_floor(label: str, confidence: float) -> tuple[str, float]:

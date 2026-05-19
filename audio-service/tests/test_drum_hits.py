@@ -74,3 +74,84 @@ def test_velocity_normalized_to_one():
     assert len(all_velocities) == 2
     assert max(all_velocities) == pytest.approx(1.0)
     assert min(all_velocities) < 0.5
+
+
+def _make_snare(sr: int, dur_sec: float = 0.15) -> np.ndarray:
+    n = int(sr * dur_sec)
+    rng = np.random.RandomState(0)
+    noise = rng.randn(n).astype(np.float32)
+    from scipy.signal import butter, sosfilt
+    sos = butter(4, [200, 2000], btype="bandpass", fs=sr, output="sos")
+    band = sosfilt(sos, noise).astype(np.float32)
+    env = np.exp(-np.arange(n) / sr / 0.04).astype(np.float32)  # 40ms decay
+    return band * env
+
+
+def _make_hihat(sr: int, dur_sec: float = 0.08) -> np.ndarray:
+    n = int(sr * dur_sec)
+    rng = np.random.RandomState(1)
+    noise = rng.randn(n).astype(np.float32)
+    from scipy.signal import butter, sosfilt
+    sos = butter(4, [8000, min(12000, sr // 2 - 100)], btype="bandpass", fs=sr, output="sos")
+    band = sosfilt(sos, noise).astype(np.float32)
+    env = np.exp(-np.arange(n) / sr / 0.02).astype(np.float32)  # 20ms decay
+    return band * env
+
+
+def _make_cymbal(sr: int, dur_sec: float = 0.5) -> np.ndarray:
+    n = int(sr * dur_sec)
+    rng = np.random.RandomState(2)
+    noise = rng.randn(n).astype(np.float32)
+    from scipy.signal import butter, sosfilt
+    sos = butter(4, [6000, min(12000, sr // 2 - 100)], btype="bandpass", fs=sr, output="sos")
+    band = sosfilt(sos, noise).astype(np.float32)
+    env = np.exp(-np.arange(n) / sr / 0.15).astype(np.float32)  # 150ms decay
+    return band * env
+
+
+def _hit_padded(sr: int, hit: np.ndarray, pre_sec: float = 0.5, post_sec: float = 0.5) -> np.ndarray:
+    pre = np.zeros(int(sr * pre_sec), dtype=np.float32)
+    post = np.zeros(int(sr * post_sec), dtype=np.float32)
+    return np.concatenate([pre, hit, post]).astype(np.float32)
+
+
+def test_kick_classified_as_kick():
+    sr = 22050
+    audio = _hit_padded(sr, _make_kick(sr, 0.0))
+    out = detect_drum_hits(audio, sr=sr)
+    assert len(out["kick"]) == 1
+    assert sum(len(v) for v in out.values()) == 1
+
+
+def test_snare_classified_as_snare():
+    sr = 22050
+    audio = _hit_padded(sr, _make_snare(sr))
+    out = detect_drum_hits(audio, sr=sr)
+    assert len(out["snare"]) == 1
+
+
+def test_hihat_classified_as_hihat():
+    sr = 22050
+    audio = _hit_padded(sr, _make_hihat(sr))
+    out = detect_drum_hits(audio, sr=sr)
+    assert len(out["hihat"]) == 1
+
+
+def test_cymbal_classified_as_cymbal():
+    sr = 22050
+    audio = _hit_padded(sr, _make_cymbal(sr))
+    out = detect_drum_hits(audio, sr=sr)
+    assert len(out["cymbal"]) == 1
+
+
+def test_low_confidence_goes_to_unknown(monkeypatch):
+    sr = 22050
+    monkeypatch.setenv("DESPIECE_DRUMS_CONFIDENCE_MIN", "1.5")
+    import importlib, src.analysis.drum_hits as dh
+    importlib.reload(dh)
+    audio = _hit_padded(sr, _make_kick(sr, 0.0))
+    out = dh.detect_drum_hits(audio, sr=sr)
+    assert len(out["kick"]) == 0
+    assert len(out["unknown"]) == 1
+    monkeypatch.setenv("DESPIECE_DRUMS_CONFIDENCE_MIN", "0.4")
+    importlib.reload(dh)
