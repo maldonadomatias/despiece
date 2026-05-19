@@ -21,6 +21,7 @@ from .analysis.residual import spectral_subtract
 from .analysis.tagging import tag_clip, free_model as tagging_free_model
 from .analysis.sub_label import collapse_to_sub_label
 from .analysis.drum_hits import detect_drum_hits
+from .analysis.chord_track import detect_chords
 
 app = FastAPI(title="Audio Analysis Service")
 
@@ -28,6 +29,7 @@ BEATS_PER_BAR = 4
 STEM_MP3_BITRATE_KBPS = 128
 ANALYSIS_VERSION_BASE = 2
 ANALYSIS_VERSION_WITH_HITS = 3
+ANALYSIS_VERSION_WITH_CHORDS = 4
 
 
 def _env_flag(name: str, default: bool) -> bool:
@@ -49,6 +51,7 @@ USE_ROFORMER_BASS = _env_flag("DESPIECE_USE_ROFORMER_BASS", True)
 USE_RESIDUAL_SUBTRACT = _env_flag("DESPIECE_USE_RESIDUAL_SUBTRACT", True)
 USE_TAGGER = _env_flag("DESPIECE_USE_TAGGER", True)
 USE_DRUM_HITS = _env_flag("DESPIECE_USE_DRUM_HITS", True)
+USE_CHORDS = _env_flag("DESPIECE_USE_CHORDS", True)
 RESIDUAL_ALPHA = _env_float("DESPIECE_RESIDUAL_ALPHA", 0.5)
 
 
@@ -179,13 +182,29 @@ def analyze(req: AnalyzeRequest):
             except Exception:
                 traceback.print_exc()
 
-        version = (
-            ANALYSIS_VERSION_WITH_HITS
-            if "hits" in stems.get("drums", {})
-            else ANALYSIS_VERSION_BASE
-        )
+        chords: list[dict] = []
+        if USE_CHORDS and bar_grid and len(bar_grid) >= 2:
+            try:
+                present = [s for s in ("bass", "guitar", "piano", "other") if s in stems_data]
+                if present:
+                    ref_sr = stems_data[present[0]][1]
+                    min_len = min(stems_data[s][0].shape[0] for s in present)
+                    harmonic_mix = np.zeros(min_len, dtype=np.float32)
+                    for s in present:
+                        harmonic_mix += stems_data[s][0][:min_len].astype(np.float32)
+                    chords = detect_chords(harmonic_mix, ref_sr, bar_grid)
+            except Exception:
+                traceback.print_exc()
+                chords = []
 
-        return {
+        if chords:
+            version = ANALYSIS_VERSION_WITH_CHORDS
+        elif "hits" in stems.get("drums", {}):
+            version = ANALYSIS_VERSION_WITH_HITS
+        else:
+            version = ANALYSIS_VERSION_BASE
+
+        response: dict = {
             "analysis_version": version,
             "bpm": bpm,
             "key": key,
@@ -195,6 +214,9 @@ def analyze(req: AnalyzeRequest):
             "sections": sections,
             "stems": stems,
         }
+        if chords:
+            response["chords"] = chords
+        return response
 
 
 def _bar_grid_from_beats(beat_times, beats_per_bar, audio_duration):
