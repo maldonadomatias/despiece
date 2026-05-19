@@ -15,3 +15,16 @@ def _find_runs(active, times):
     if in_run:
         runs.append((float(times[start_idx]), float(times[-1])))
     return runs
+
+
+def _merge_close(runs, gap_sec):
+    if not runs:
+        return []
+    merged = [runs[0]]
+    for s, e in runs[1:]:
+        ps, pe = merged[-1]
+        if s - pe <= gap_sec:
+            merged[-1] = (ps, e)
+        else:
+            merged.append((s, e))
+    return merged
