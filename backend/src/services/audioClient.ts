@@ -1,4 +1,4 @@
-import { Agent } from 'undici';
+import { Agent, fetch } from 'undici';
 import { AnalysisResult } from '../domain/song.js';
 
 const AUDIO_SERVICE_URL =
@@ -19,7 +19,6 @@ export async function analyzeAudio(storageKey: string): Promise<AnalysisResult> 
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ storage_key: storageKey }),
-    // @ts-expect-error — undici-specific option, not in standard fetch types
     dispatcher: longTimeoutAgent,
   });
 

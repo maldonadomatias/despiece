@@ -7,7 +7,10 @@ if (!process.env.DATABASE_URL) {
   dotenv.config();
 }
 
-const { Pool } = pg;
+const { Pool, types } = pg;
+
+// NUMERIC (OID 1700) → string by default; parse to number for app columns like bpm.
+types.setTypeParser(1700, (val) => (val === null ? null : parseFloat(val)));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
