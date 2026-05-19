@@ -21,7 +21,18 @@ export interface SongAnalysis {
 
 export type SubLabel = 'lead' | 'pad' | 'synth' | 'strings' | 'fx' | 'other_misc';
 
-export type AnalysisVersion = 1 | 2 | 3;
+export type AnalysisVersion = 1 | 2 | 3 | 4;
+
+export type ChordLabel =
+  | 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B'
+  | 'Cm' | 'C#m' | 'Dm' | 'D#m' | 'Em' | 'Fm' | 'F#m' | 'Gm' | 'G#m' | 'Am' | 'A#m' | 'Bm'
+  | 'N';
+
+export interface Chord {
+  start_sec: number;
+  end_sec: number;
+  label: ChordLabel;
+}
 
 export type DrumHitClass = 'kick' | 'snare' | 'hihat' | 'cymbal' | 'unknown';
 
@@ -48,6 +59,7 @@ export interface AnalysisResult {
   sections: Section[];
   stems: Record<string, StemAnalysis>;
   analysis_version: AnalysisVersion;
+  chords?: Chord[];
 }
 
 export interface Section {
