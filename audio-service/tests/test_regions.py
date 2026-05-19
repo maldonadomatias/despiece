@@ -84,3 +84,61 @@ def test_snap_picks_nearest():
 
 def test_snap_empty_grid_returns_input():
     assert _snap(2.5, []) == 2.5
+
+
+from src.analysis.regions import detect_regions
+
+
+def _make_audio(sr, segments):
+    """segments = [(start_sec, end_sec, amp)]; rest is silence."""
+    total_sec = max(seg[1] for seg in segments)
+    y = np.zeros(int(sr * total_sec), dtype=np.float32)
+    for s, e, amp in segments:
+        i0 = int(s * sr)
+        i1 = int(e * sr)
+        t = np.arange(i1 - i0) / sr
+        y[i0:i1] = (amp * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    return y
+
+
+def test_detect_regions_two_active_intervals():
+    sr = 22050
+    # 5s tone (1-6s), silence (6-8s), 8s tone (8-16s) -> total 16s
+    y = _make_audio(sr, [(1.0, 6.0, 0.5), (8.0, 16.0, 0.5)])
+    # 120 BPM 4/4: beats at 0.5s spacing, downbeats every 2s
+    beats = [i * 0.5 for i in range(int(16 / 0.5))]
+    regions = detect_regions(y, sr, beats, beats_per_bar=4)
+
+    assert len(regions) == 2
+    assert abs(regions[0]["start_sec"] - 0.0) < 0.5 or abs(regions[0]["start_sec"] - 2.0) < 0.5
+    assert regions[0]["end_sec"] > regions[0]["start_sec"]
+    assert regions[1]["start_sec"] > regions[0]["end_sec"]
+
+
+def test_detect_regions_silence_returns_empty():
+    sr = 22050
+    y = np.zeros(sr * 4, dtype=np.float32)
+    beats = [i * 0.5 for i in range(8)]
+    assert detect_regions(y, sr, beats, beats_per_bar=4) == []
+
+
+def test_detect_regions_short_active_filtered_out():
+    sr = 22050
+    # 0.2s active burst — should be dropped (< 0.5s min run)
+    y = _make_audio(sr, [(1.0, 1.2, 0.5)])
+    beats = [i * 0.5 for i in range(8)]
+    # Pad to 4s
+    pad = np.zeros(sr * 4 - len(y), dtype=np.float32)
+    y = np.concatenate([y, pad])
+    assert detect_regions(y, sr, beats, beats_per_bar=4) == []
+
+
+def test_detect_regions_envelope_relative_to_region_start():
+    sr = 22050
+    y = _make_audio(sr, [(1.0, 6.0, 0.5)])
+    beats = [i * 0.5 for i in range(12)]
+    regions = detect_regions(y, sr, beats, beats_per_bar=4)
+    assert len(regions) >= 1
+    env = regions[0]["envelope"]
+    assert env[0][0] == 0.0  # relative time starts at 0
+    assert all(0.0 <= v <= 1.0 for _, v in env)
