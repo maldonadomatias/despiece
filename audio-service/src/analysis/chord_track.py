@@ -63,8 +63,16 @@ def _viterbi_path(audio: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray]:
 
     templates = _build_templates()
     scores = templates @ chroma_norm  # (24, n_frames)
-    no_chord = np.maximum(0.0, NO_CHORD_THRESHOLD - scores.max(axis=0))[None, :]
+    # no-chord score: the threshold itself, broadcast across all frames.
+    # When threshold <= typical cosine scores (~0.8-1.0), chord templates win.
+    # When threshold > 1.0 (impossible for cosine similarity to reach), the
+    # no-chord score exceeds all template scores, forcing "N" every frame.
+    no_chord = np.full((1, n_frames), NO_CHORD_THRESHOLD, dtype=np.float32)
     scores = np.vstack([scores, no_chord])  # (25, n_frames)
+    # Normalize columns to [0, 1] so librosa.sequence.viterbi accepts them.
+    col_max = scores.max(axis=0, keepdims=True)
+    col_max = np.where(col_max == 0, 1.0, col_max)
+    scores = scores / col_max
 
     n_states = 25
     trans = np.full((n_states, n_states), (1.0 - SELF_TRANSITION) / (n_states - 1), dtype=np.float64)
@@ -89,6 +97,28 @@ def detect_chords(
         return []
     if len(bar_grid) < 2:
         return []
-    # Stubbed in Task 2 — Task 3 replaces with real aggregation + merge.
-    _viterbi_path(audio, sr)
-    return []
+
+    path, frame_times = _viterbi_path(audio, sr)
+
+    out: list[dict] = []
+    for bar_idx in range(len(bar_grid) - 1):
+        bar_start = float(bar_grid[bar_idx])
+        bar_end = float(bar_grid[bar_idx + 1])
+        in_bar = (frame_times >= bar_start) & (frame_times < bar_end)
+        if not in_bar.any():
+            label_idx = 24  # no-chord
+        else:
+            label_idx = int(np.bincount(path[in_bar], minlength=25).argmax())
+        label = _idx_to_label(label_idx)
+
+        start_rounded = round(bar_start, 3)
+        end_rounded = round(bar_end, 3)
+        if out and out[-1]["label"] == label:
+            out[-1]["end_sec"] = end_rounded
+        else:
+            out.append({
+                "start_sec": start_rounded,
+                "end_sec": end_rounded,
+                "label": label,
+            })
+    return out
