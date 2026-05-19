@@ -106,6 +106,29 @@ router.get('/:id/audio', async (req: Request, res: Response, next: NextFunction)
   }
 });
 
+const VALID_STEMS = new Set(['vocals', 'drums', 'bass', 'guitar', 'piano', 'other']);
+
+// GET /api/songs/:id/stems/:stem — redirect to presigned URL for a stem MP3
+router.get('/:id/stems/:stem', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id, stem } = req.params;
+    if (!VALID_STEMS.has(stem)) {
+      res.status(400).json({ error: 'Invalid stem name' });
+      return;
+    }
+    const song = await songService.getSong(id);
+    if (!song) {
+      res.status(404).json({ error: 'Song not found' });
+      return;
+    }
+    const key = `songs/${id}/stems/${stem}.mp3`;
+    const url = await presignDownload(key);
+    res.redirect(302, url);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /api/songs/:id
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {

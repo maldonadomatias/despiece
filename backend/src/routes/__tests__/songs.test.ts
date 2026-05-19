@@ -93,3 +93,45 @@ describe('GET /api/songs/:id/audio', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('GET /api/songs/:id/stems/:stem', () => {
+  it('returns 302 to presigned stem URL', async () => {
+    const songService = await import('../../services/songService.js');
+    (songService.getSong as jest.Mock).mockResolvedValueOnce({
+      id: 'song-1',
+      storage_key: 'songs/song-1.mp3',
+      original_name: 't.mp3',
+      status: 'done',
+      duration_sec: 1,
+      bpm: 1,
+      music_key: 'C major',
+      error_message: null,
+      created_at: new Date().toISOString(),
+    });
+
+    const storage = await import('../../services/storageService.js');
+    (storage.presignDownload as jest.Mock).mockClear();
+    (storage.presignDownload as jest.Mock).mockResolvedValueOnce(
+      'https://example.com/stem'
+    );
+
+    const res = await request(app).get('/api/songs/song-1/stems/vocals');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('https://example.com/stem');
+    expect((storage.presignDownload as jest.Mock).mock.calls[0][0]).toBe(
+      'songs/song-1/stems/vocals.mp3'
+    );
+  });
+
+  it('returns 400 for invalid stem name', async () => {
+    const res = await request(app).get('/api/songs/song-1/stems/banjo');
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for unknown song', async () => {
+    const songService = await import('../../services/songService.js');
+    (songService.getSong as jest.Mock).mockResolvedValueOnce(null);
+    const res = await request(app).get('/api/songs/missing/stems/vocals');
+    expect(res.status).toBe(404);
+  });
+});
