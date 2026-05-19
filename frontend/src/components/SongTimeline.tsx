@@ -1,10 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnalysisResult } from '@/types/song';
 import { StemTrack } from './StemTrack';
 import { SectionBar } from './SectionBar';
 import { TimeAxis } from './TimeAxis';
 import { PlaybackBar } from './PlaybackBar';
-import { getMixAudioUrl } from '@/lib/api';
+import { getStemAudioUrl } from '@/lib/api';
+import { audible } from '@/lib/audible';
+import { useStemTransport } from '@/hooks/useStemTransport';
 
 const STEM_ORDER = ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other'];
 
@@ -32,11 +34,19 @@ export function SongTimeline({ songId, analysis }: Props) {
   const [sectionLabels, setSectionLabels] = useState<Record<string, string>>({});
   const [soloed, setSoloed] = useState<Set<string>>(new Set());
   const [muted, setMuted] = useState<Set<string>>(new Set());
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const transport = useStemTransport();
 
   const timelineWidth = useMemo(
     () => Math.max(600, Math.min(1400, window.innerWidth - LABEL_WIDTH - 80)),
     []
+  );
+
+  const activeStems = useMemo(
+    () =>
+      STEM_ORDER.filter(
+        (s) => analysis.stems[s] && analysis.stems[s].audio_key !== null
+      ),
+    [analysis.stems]
   );
 
   function toggleSolo(name: string) {
@@ -58,16 +68,11 @@ export function SongTimeline({ songId, analysis }: Props) {
   }
 
   function isDim(name: string) {
-    if (muted.has(name)) return true;
-    if (soloed.size > 0 && !soloed.has(name)) return true;
-    return false;
+    return !audible(name, soloed, muted);
   }
 
   function handleRegionClick(startSec: number) {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = startSec;
-    audio.play();
+    transport.playFrom(startSec);
   }
 
   function handleRename(label: string, name: string) {
@@ -76,7 +81,15 @@ export function SongTimeline({ songId, analysis }: Props) {
 
   return (
     <div className="space-y-4">
-      <audio ref={audioRef} src={getMixAudioUrl(songId)} preload="auto" />
+      {activeStems.map((name) => (
+        <audio
+          key={name}
+          ref={(el) => transport.registerAudio(name, el)}
+          src={getStemAudioUrl(songId, name)}
+          muted={!audible(name, soloed, muted)}
+          preload="auto"
+        />
+      ))}
 
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-sm text-muted-foreground">Axis:</span>
@@ -141,7 +154,7 @@ export function SongTimeline({ songId, analysis }: Props) {
           </div>
 
           <PlaybackBar
-            audioRef={audioRef}
+            transport={transport}
             durationSec={analysis.duration_sec}
             timelineWidth={timelineWidth}
             labelWidth={LABEL_WIDTH}
