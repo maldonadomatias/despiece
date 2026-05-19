@@ -83,8 +83,18 @@ export function AnalysisPage() {
         </div>
       )}
 
-      {song.status === 'done' && song.analysis && (
-        <SongTimeline analysis={song.analysis} />
+      {song.status === 'done' &&
+        song.analysis &&
+        Object.values(song.analysis.stems).some(
+          (s) => !('regions' in (s as object))
+        ) && (
+          <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+            Older analysis format detected. Re-upload this song to view the new region layout.
+          </div>
+        )}
+
+      {song.status === 'done' && song.analysis && song.analysis.stems && (
+        <SongTimeline songId={song.id} analysis={song.analysis} />
       )}
     </div>
   );

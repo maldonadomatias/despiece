@@ -1,34 +1,74 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AnalysisResult } from '@/types/song';
-import { StemRow } from './StemRow';
+import { StemTrack } from './StemTrack';
 import { SectionBar } from './SectionBar';
 import { TimeAxis } from './TimeAxis';
+import { PlaybackBar } from './PlaybackBar';
+import { getMixAudioUrl } from '@/lib/api';
 
-const STEM_ORDER = ['vocals', 'drums', 'bass', 'other'];
-const ROW_HEIGHT = 64;
-const SECTION_HEIGHT = 28;
-const AXIS_HEIGHT = 24;
-const LABEL_WIDTH = 72;
+const STEM_ORDER = ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other'];
 
 const STEM_COLORS: Record<string, string> = {
   vocals: '#6366f1',
-  drums: '#f59e0b',
-  bass: '#10b981',
-  other: '#8b5cf6',
+  drums:  '#f59e0b',
+  bass:   '#10b981',
+  guitar: '#a78bfa',
+  piano:  '#06b6d4',
+  other:  '#94a3b8',
 };
 
+const ROW_HEIGHT = 48;
+const SECTION_HEIGHT = 28;
+const AXIS_HEIGHT = 24;
+const LABEL_WIDTH = 96;
+
 interface Props {
+  songId: string;
   analysis: AnalysisResult;
 }
 
-export function SongTimeline({ analysis }: Props) {
+export function SongTimeline({ songId, analysis }: Props) {
   const [axisMode, setAxisMode] = useState<'seconds' | 'bars'>('bars');
   const [sectionLabels, setSectionLabels] = useState<Record<string, string>>({});
+  const [soloed, setSoloed] = useState<Set<string>>(new Set());
+  const [muted, setMuted] = useState<Set<string>>(new Set());
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const timelineWidth = Math.max(
-    600,
-    Math.min(1100, window.innerWidth - LABEL_WIDTH - 80)
+  const timelineWidth = useMemo(
+    () => Math.max(600, Math.min(1400, window.innerWidth - LABEL_WIDTH - 80)),
+    []
   );
+
+  function toggleSolo(name: string) {
+    setSoloed((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function toggleMute(name: string) {
+    setMuted((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function isDim(name: string) {
+    if (muted.has(name)) return true;
+    if (soloed.size > 0 && !soloed.has(name)) return true;
+    return false;
+  }
+
+  function handleRegionClick(startSec: number) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = startSec;
+    audio.play();
+  }
 
   function handleRename(label: string, name: string) {
     setSectionLabels((prev) => ({ ...prev, [label]: name }));
@@ -36,6 +76,8 @@ export function SongTimeline({ analysis }: Props) {
 
   return (
     <div className="space-y-4">
+      <audio ref={audioRef} src={getMixAudioUrl(songId)} preload="auto" />
+
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-sm text-muted-foreground">Axis:</span>
         <button
@@ -45,7 +87,7 @@ export function SongTimeline({ analysis }: Props) {
           {axisMode === 'bars' ? 'Bars' : 'Seconds'}
         </button>
         <span className="text-xs text-muted-foreground">
-          Double-click a section to rename it.
+          Double-click a section to rename it. Click a region to jump audio.
         </span>
       </div>
 
@@ -69,23 +111,22 @@ export function SongTimeline({ analysis }: Props) {
           </div>
 
           {STEM_ORDER.filter((s) => analysis.stems[s]).map((stemName) => (
-            <div key={stemName} className="flex items-center mt-1">
-              <div
-                style={{ width: LABEL_WIDTH }}
-                className="text-xs font-medium capitalize text-right pr-2 text-muted-foreground"
-              >
-                {stemName}
-              </div>
-              <div className="rounded overflow-hidden bg-muted/20">
-                <StemRow
-                  stemName={stemName}
-                  data={analysis.stems[stemName]}
-                  durationSec={analysis.duration_sec}
-                  width={timelineWidth}
-                  height={ROW_HEIGHT}
-                />
-              </div>
-            </div>
+            <StemTrack
+              key={stemName}
+              name={stemName}
+              stem={analysis.stems[stemName]}
+              durationSec={analysis.duration_sec}
+              timelineWidth={timelineWidth}
+              color={STEM_COLORS[stemName] ?? '#94a3b8'}
+              dim={isDim(stemName)}
+              soloed={soloed.has(stemName)}
+              muted={muted.has(stemName)}
+              onToggleSolo={() => toggleSolo(stemName)}
+              onToggleMute={() => toggleMute(stemName)}
+              onRegionClick={handleRegionClick}
+              labelWidth={LABEL_WIDTH}
+              rowHeight={ROW_HEIGHT}
+            />
           ))}
 
           <div className="flex items-center mt-1">
@@ -98,6 +139,13 @@ export function SongTimeline({ analysis }: Props) {
               mode={axisMode}
             />
           </div>
+
+          <PlaybackBar
+            audioRef={audioRef}
+            durationSec={analysis.duration_sec}
+            timelineWidth={timelineWidth}
+            labelWidth={LABEL_WIDTH}
+          />
         </div>
       </div>
 
