@@ -8,7 +8,9 @@ jest.mock('file-type', () => ({
 jest.mock('../../services/storageService.js', () => ({
   uploadFile: jest.fn().mockResolvedValue(undefined),
   deleteFile: jest.fn().mockResolvedValue(undefined),
+  deleteFilesByPrefix: jest.fn().mockResolvedValue(undefined),
   ensureBucketExists: jest.fn().mockResolvedValue(undefined),
+  presignDownload: jest.fn().mockResolvedValue('https://example.com/default'),
 }));
 
 jest.mock('../../services/songService.js', () => {
@@ -56,5 +58,100 @@ describe('DELETE /api/songs/:id', () => {
     const res = await request(app).delete('/api/songs/nonexistent');
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('Song not found');
+  });
+});
+
+describe('GET /api/songs/:id/audio', () => {
+  it('returns 302 redirect to presigned URL', async () => {
+    const songService = await import('../../services/songService.js');
+    (songService.getSong as jest.Mock).mockResolvedValueOnce({
+      id: 'song-1',
+      storage_key: 'songs/song-1.mp3',
+      original_name: 't.mp3',
+      status: 'done',
+      duration_sec: 1,
+      bpm: 1,
+      music_key: 'C major',
+      error_message: null,
+      created_at: new Date().toISOString(),
+    });
+
+    const storage = await import('../../services/storageService.js');
+    (storage.presignDownload as jest.Mock).mockResolvedValueOnce(
+      'https://example.com/audio'
+    );
+
+    const res = await request(app).get('/api/songs/song-1/audio');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('https://example.com/audio');
+  });
+
+  it('returns 404 for unknown song', async () => {
+    const songService = await import('../../services/songService.js');
+    (songService.getSong as jest.Mock).mockResolvedValueOnce(null);
+    const res = await request(app).get('/api/songs/nope/audio');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/songs/:id/stems/:stem', () => {
+  it('returns 302 to presigned stem URL', async () => {
+    const songService = await import('../../services/songService.js');
+    (songService.getSong as jest.Mock).mockResolvedValueOnce({
+      id: 'song-1',
+      storage_key: 'songs/song-1.mp3',
+      original_name: 't.mp3',
+      status: 'done',
+      duration_sec: 1,
+      bpm: 1,
+      music_key: 'C major',
+      error_message: null,
+      created_at: new Date().toISOString(),
+    });
+
+    const storage = await import('../../services/storageService.js');
+    (storage.presignDownload as jest.Mock).mockClear();
+    (storage.presignDownload as jest.Mock).mockResolvedValueOnce(
+      'https://example.com/stem'
+    );
+
+    const res = await request(app).get('/api/songs/song-1/stems/vocals');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('https://example.com/stem');
+    expect((storage.presignDownload as jest.Mock).mock.calls[0][0]).toBe(
+      'songs/song-1/stems/vocals.mp3'
+    );
+  });
+
+  it('returns 400 for invalid stem name', async () => {
+    const res = await request(app).get('/api/songs/song-1/stems/banjo');
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for unknown song', async () => {
+    const songService = await import('../../services/songService.js');
+    (songService.getSong as jest.Mock).mockResolvedValueOnce(null);
+    const res = await request(app).get('/api/songs/missing/stems/vocals');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('DELETE /api/songs/:id cleans up stems', () => {
+  it('calls deleteFile (original) and deleteFilesByPrefix (stems)', async () => {
+    const songService = await import('../../services/songService.js');
+    (songService.deleteSong as jest.Mock).mockResolvedValueOnce('songs/abc.mp3');
+
+    const storage = await import('../../services/storageService.js');
+    (storage.deleteFilesByPrefix as jest.Mock).mockClear();
+    (storage.deleteFile as jest.Mock).mockClear();
+    (storage.deleteFilesByPrefix as jest.Mock).mockResolvedValueOnce(undefined);
+    (storage.deleteFile as jest.Mock).mockResolvedValueOnce(undefined);
+
+    const res = await request(app).delete('/api/songs/abc');
+    expect(res.status).toBe(204);
+    expect((storage.deleteFile as jest.Mock).mock.calls[0][0]).toBe('songs/abc.mp3');
+    expect((storage.deleteFilesByPrefix as jest.Mock).mock.calls[0][0]).toBe(
+      'songs/abc/'
+    );
   });
 });

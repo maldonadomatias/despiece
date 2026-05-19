@@ -1,10 +1,14 @@
 import {
   S3Client,
+  GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
   HeadBucketCommand,
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import logger from '../utils/logger.js';
 
 function buildS3Client(): S3Client {
@@ -82,4 +86,44 @@ export async function deleteFile(key: string): Promise<void> {
     logger.error({ key, err }, 'Failed to delete file from S3');
     throw err;
   }
+}
+
+export async function deleteFilesByPrefix(prefix: string): Promise<void> {
+  const s3 = getS3();
+  const bucket = getBucket();
+  let continuationToken: string | undefined;
+
+  do {
+    const listResp = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      })
+    );
+
+    const objects = (listResp.Contents ?? [])
+      .map((o) => o.Key)
+      .filter((k): k is string => typeof k === 'string')
+      .map((Key) => ({ Key }));
+
+    if (objects.length > 0) {
+      await s3.send(
+        new DeleteObjectsCommand({
+          Bucket: bucket,
+          Delete: { Objects: objects },
+        })
+      );
+    }
+
+    continuationToken = listResp.IsTruncated ? listResp.NextContinuationToken : undefined;
+  } while (continuationToken);
+}
+
+export async function presignDownload(
+  key: string,
+  expiresInSec: number = 3600
+): Promise<string> {
+  const cmd = new GetObjectCommand({ Bucket: getBucket(), Key: key });
+  return getSignedUrl(getS3(), cmd, { expiresIn: expiresInSec });
 }

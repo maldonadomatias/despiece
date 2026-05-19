@@ -4,6 +4,8 @@ import soundfile as sf
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
+from src.analysis.demucs_runner import STEMS
+
 
 @pytest.fixture
 def client():
@@ -33,25 +35,25 @@ def test_analyze_returns_stems(client, dummy_wav, sample_audio):
         shutil.copy(dummy_wav, dest)
 
     def fake_separate(path, out_dir):
-        return {
-            "drums": (y, sr),
-            "bass": (y * 0.5, sr),
-            "other": (y * 0.3, sr),
-            "vocals": (y * 0.2, sr),
-        }
+        return {stem: (y * (0.5 ** i), sr) for i, stem in enumerate(STEMS)}
 
     with patch("src.main.download_to_path", side_effect=fake_download), \
          patch("src.main.separate_stems", side_effect=fake_separate), \
-         patch("src.main.detect_bpm_and_beats", return_value=(120.0, [0.5, 1.0, 1.5])):
+         patch("src.main.detect_bpm_and_beats", return_value=(120.0, [0.5, 1.0, 1.5])), \
+         patch("src.main.encode_mp3"), \
+         patch("src.main.upload_from_path"), \
+         patch("src.main.detect_regions", return_value=[]):
         res = client.post("/analyze", json={"storage_key": "songs/test.wav"})
 
     assert res.status_code == 200
     body = res.json()
-    assert set(body["stems"].keys()) == {"drums", "bass", "other", "vocals"}
+    assert set(body["stems"].keys()) == set(STEMS)
     assert body["duration_sec"] > 0
     assert body["bpm"] > 0
     assert body["key"] != "unknown"
-    assert all("envelope" in v for v in body["stems"].values())
+    assert all("audio_key" in v for v in body["stems"].values())
+    assert all("regions" in v for v in body["stems"].values())
     assert isinstance(body["beat_grid"], list)
+    assert isinstance(body["bar_grid"], list)
     assert isinstance(body["sections"], list)
     assert len(body["sections"]) > 0
