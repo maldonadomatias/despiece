@@ -14,11 +14,11 @@ const longTimeoutAgent = new Agent({
   keepAliveTimeout: ANALYZE_TIMEOUT_MS,
 });
 
-export async function analyzeAudio(storageKey: string): Promise<AnalysisResult> {
+export async function analyzeAudio(songId: string, storageKey: string): Promise<AnalysisResult> {
   const res = await fetch(`${AUDIO_SERVICE_URL}/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ storage_key: storageKey }),
+    body: JSON.stringify({ storage_key: storageKey, song_id: songId }),
     dispatcher: longTimeoutAgent,
   });
 
