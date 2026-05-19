@@ -51,11 +51,12 @@ def client(monkeypatch):
         ],
     )
 
-    # Force detect_drum_hits to raise so analysis_version stays at 2 for this fixture.
-    def _raise_drum_hits(audio, sr):
-        raise RuntimeError("drum hits disabled for this fixture")
-
-    monkeypatch.setattr(main_mod, "detect_drum_hits", _raise_drum_hits)
+    monkeypatch.setattr(
+        main_mod, "detect_drum_hits",
+        lambda audio, sr: {
+            "kick": [], "snare": [], "hihat": [], "cymbal": [], "unknown": [],
+        },
+    )
 
     # Map "Pad" to our taxonomy via the existing sub_label module.
     # No monkeypatch needed — collapse_to_sub_label already maps "Pad" → "pad".
@@ -63,14 +64,14 @@ def client(monkeypatch):
     return TestClient(main_mod.app)
 
 
-def test_analyze_returns_version_2_and_sub_label(client):
+def test_analyze_returns_version_3_and_sub_label(client):
     resp = client.post(
         "/analyze",
         json={"song_id": "abc-123", "storage_key": "songs/abc-123.wav"},
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["analysis_version"] == 2
+    assert body["analysis_version"] == 3
     assert set(body["stems"].keys()) == {"drums", "bass", "other", "vocals", "guitar", "piano"}
 
     other_regions = body["stems"]["other"]["regions"]
