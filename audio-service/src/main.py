@@ -20,12 +20,14 @@ from .analysis.ensemble import (
 from .analysis.residual import spectral_subtract
 from .analysis.tagging import tag_clip, free_model as tagging_free_model
 from .analysis.sub_label import collapse_to_sub_label
+from .analysis.drum_hits import detect_drum_hits
 
 app = FastAPI(title="Audio Analysis Service")
 
 BEATS_PER_BAR = 4
 STEM_MP3_BITRATE_KBPS = 128
-ANALYSIS_VERSION = 2
+ANALYSIS_VERSION_BASE = 2
+ANALYSIS_VERSION_WITH_HITS = 3
 
 
 def _env_flag(name: str, default: bool) -> bool:
@@ -46,6 +48,7 @@ USE_ROFORMER_VOCALS = _env_flag("DESPIECE_USE_ROFORMER_VOCALS", True)
 USE_ROFORMER_BASS = _env_flag("DESPIECE_USE_ROFORMER_BASS", True)
 USE_RESIDUAL_SUBTRACT = _env_flag("DESPIECE_USE_RESIDUAL_SUBTRACT", True)
 USE_TAGGER = _env_flag("DESPIECE_USE_TAGGER", True)
+USE_DRUM_HITS = _env_flag("DESPIECE_USE_DRUM_HITS", True)
 RESIDUAL_ALPHA = _env_float("DESPIECE_RESIDUAL_ALPHA", 0.5)
 
 
@@ -169,8 +172,21 @@ def analyze(req: AnalyzeRequest):
 
             stems[stem_name] = {"audio_key": audio_key, "regions": regions}
 
+        if USE_DRUM_HITS and "drums" in stems and stems["drums"]["audio_key"] is not None:
+            try:
+                drums_audio, drums_sr = stems_data["drums"]
+                stems["drums"]["hits"] = detect_drum_hits(drums_audio, drums_sr)
+            except Exception:
+                traceback.print_exc()
+
+        version = (
+            ANALYSIS_VERSION_WITH_HITS
+            if "hits" in stems.get("drums", {})
+            else ANALYSIS_VERSION_BASE
+        )
+
         return {
-            "analysis_version": ANALYSIS_VERSION,
+            "analysis_version": version,
             "bpm": bpm,
             "key": key,
             "duration_sec": round(duration_sec, 3),
