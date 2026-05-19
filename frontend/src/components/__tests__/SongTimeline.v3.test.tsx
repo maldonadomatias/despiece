@@ -31,15 +31,15 @@ describe('SongTimeline v3', () => {
     expect(screen.getByText(/older pipeline/i)).toBeInTheDocument();
   });
 
-  it('v2 → soft v3 notice banner renders, timeline still renders', () => {
+  it('v2 → soft notice banner renders, timeline still renders', () => {
     render(<SongTimeline songId="abc" analysis={baseAnalysis(2)} />);
-    expect(screen.getByText(/drum sub-rows are available/i)).toBeInTheDocument();
+    expect(screen.getByText(/newer analysis features available/i)).toBeInTheDocument();
     expect(screen.queryByText(/older pipeline/i)).not.toBeInTheDocument();
   });
 
-  it('v3 with no hits → no v3 notice and no drum legend', () => {
+  it('v3 with no hits → notice banner shows (v3 < preferred v4), no drum legend', () => {
     render(<SongTimeline songId="abc" analysis={baseAnalysis(3)} />);
-    expect(screen.queryByText(/drum sub-rows are available/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/newer analysis features available/i)).toBeInTheDocument();
     expect(screen.queryByText(/drum hits:/i)).not.toBeInTheDocument();
   });
 

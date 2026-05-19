@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { AnalysisResult, DrumHitClass, DrumHits, SubLabel } from '@/types/song';
+import { AnalysisResult, Chord, ChordLabel, DrumHitClass, DrumHits, SubLabel } from '@/types/song';
 import { StemTrack } from './StemTrack';
 import { SectionBar } from './SectionBar';
 import { TimeAxis } from './TimeAxis';
 import { PlaybackBar } from './PlaybackBar';
+import { ChordBar } from './ChordBar';
 import { getStemAudioUrl } from '@/lib/api';
 import { audible } from '@/lib/audible';
 import { useStemTransport } from '@/hooks/useStemTransport';
@@ -36,12 +37,29 @@ const DRUM_HIT_COLORS: Record<DrumHitClass, string> = {
   unknown: '#64748b',
 };
 
+const CHORD_ROOT_COLORS: Record<string, string> = {
+  C:    '#ef4444',
+  'C#': '#f97316',
+  D:    '#f59e0b',
+  'D#': '#eab308',
+  E:    '#84cc16',
+  F:    '#22c55e',
+  'F#': '#14b8a6',
+  G:    '#06b6d4',
+  'G#': '#3b82f6',
+  A:    '#8b5cf6',
+  'A#': '#a855f7',
+  B:    '#ec4899',
+};
+const NO_CHORD_COLOR = '#475569';
+const CHORD_HEIGHT = 28;
+
 const ROW_HEIGHT = 48;
 const SECTION_HEIGHT = 28;
 const AXIS_HEIGHT = 24;
 const LABEL_WIDTH = 96;
 const SUPPORTED_ANALYSIS_VERSION = 2;
-const PREFERRED_ANALYSIS_VERSION = 3;
+const PREFERRED_ANALYSIS_VERSION = 4;
 
 interface Props {
   songId: string;
@@ -133,7 +151,7 @@ export function SongTimeline({ songId, analysis }: Props) {
     <div className="space-y-4">
       {showV3Notice && (
         <div className="p-3 border rounded bg-amber-50 text-xs text-amber-900">
-          Drum sub-rows are available — re-analyze to see kick / snare / hi-hat / cymbal per hit.
+          Newer analysis features available — re-analyze for drum sub-rows + chord track.
         </div>
       )}
 
@@ -178,6 +196,26 @@ export function SongTimeline({ songId, analysis }: Props) {
               onRename={handleRename}
             />
           </div>
+
+          {analysis.chords && analysis.chords.length > 0 && (
+            <div className="flex items-center mt-1">
+              <div
+                style={{ width: LABEL_WIDTH }}
+                className="text-xs text-muted-foreground pr-2 text-right"
+              >
+                Chords
+              </div>
+              <ChordBar
+                chords={analysis.chords}
+                durationSec={analysis.duration_sec}
+                width={timelineWidth}
+                height={CHORD_HEIGHT}
+                rootColors={CHORD_ROOT_COLORS}
+                noChordColor={NO_CHORD_COLOR}
+                onChordClick={handleRegionClick}
+              />
+            </div>
+          )}
 
           {STEM_ORDER.filter((s) => analysis.stems[s]).map((stemName) => (
             <StemTrack
@@ -257,6 +295,21 @@ export function SongTimeline({ songId, analysis }: Props) {
                 style={{ background: DRUM_HIT_COLORS[cls] }}
               />
               {cls}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {analysis.chords && analysis.chords.length > 0 && (
+        <div className="flex gap-3 flex-wrap text-xs text-muted-foreground">
+          <span className="font-medium">Chord roots:</span>
+          {(['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'] as const).map((root) => (
+            <span key={root} className="flex items-center gap-1">
+              <span
+                className="inline-block w-3 h-3 rounded-sm"
+                style={{ background: CHORD_ROOT_COLORS[root] }}
+              />
+              {root}
             </span>
           ))}
         </div>
