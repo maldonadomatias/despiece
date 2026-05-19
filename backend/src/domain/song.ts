@@ -21,7 +21,23 @@ export interface SongAnalysis {
 
 export type SubLabel = 'lead' | 'pad' | 'synth' | 'strings' | 'fx' | 'other_misc';
 
-export type AnalysisVersion = 1 | 2;
+export type AnalysisVersion = 1 | 2 | 3;
+
+export type DrumHitClass = 'kick' | 'snare' | 'hihat' | 'cymbal' | 'unknown';
+
+export interface DrumHit {
+  t_sec: number;
+  velocity: number;    // 0-1
+  confidence: number;  // 0-1
+}
+
+export interface DrumHits {
+  kick: DrumHit[];
+  snare: DrumHit[];
+  hihat: DrumHit[];
+  cymbal: DrumHit[];
+  unknown: DrumHit[];
+}
 
 export interface AnalysisResult {
   bpm: number;
@@ -43,6 +59,7 @@ export interface Section {
 export interface StemAnalysis {
   audio_key: string | null;
   regions: StemRegion[];
+  hits?: DrumHits;
 }
 
 export interface StemRegion {
