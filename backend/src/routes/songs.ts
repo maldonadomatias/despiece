@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { fileTypeFromBuffer } from 'file-type';
-import { uploadFile, deleteFile } from '../services/storageService.js';
+import { uploadFile, deleteFile, presignDownload } from '../services/storageService.js';
 import * as songService from '../services/songService.js';
 import logger from '../utils/logger.js';
 
@@ -86,6 +86,21 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
       result.analysis = analysis?.result_json ?? null;
     }
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/songs/:id/audio — redirect to presigned URL for original mix
+router.get('/:id/audio', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const song = await songService.getSong(req.params.id);
+    if (!song) {
+      res.status(404).json({ error: 'Song not found' });
+      return;
+    }
+    const url = await presignDownload(song.storage_key);
+    res.redirect(302, url);
   } catch (err) {
     next(err);
   }
