@@ -61,10 +61,11 @@ def test_build_bar_grid_120_bpm_4_4():
     # 120 BPM 4/4: beats at 0.5s spacing, downbeats every 4th beat (2.0s spacing)
     beats = [i * 0.5 for i in range(20)]
     grid = _build_bar_grid(beats, beats_per_bar=4, audio_duration=10.0)
+    # downbeats: 0.0, 2.0, 4.0, 6.0, 8.0 — plus audio_duration tail (10.0)
     assert grid[0] == 0.0
-    assert grid[1] == 0.0  # first beat
-    assert grid[2] == 2.0
-    assert grid[3] == 4.0
+    assert grid[1] == 2.0
+    assert grid[2] == 4.0
+    assert grid[3] == 6.0
     assert grid[-1] == 10.0
 
 
