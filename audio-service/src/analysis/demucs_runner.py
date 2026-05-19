@@ -1,7 +1,7 @@
 import numpy as np
 
-# Stem order for htdemucs
-STEMS = ["drums", "bass", "other", "vocals"]
+# Stem order for htdemucs_6s
+STEMS = ["drums", "bass", "other", "vocals", "guitar", "piano"]
 
 _model = None
 
@@ -12,7 +12,7 @@ def _get_model():
         import torch
         from demucs.pretrained import get_model
 
-        _model = get_model("htdemucs")
+        _model = get_model("htdemucs_6s")
         _model.eval()
         device = "cuda" if torch.cuda.is_available() else "cpu"
         _model.to(device)

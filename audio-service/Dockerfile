@@ -10,8 +10,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download Demucs htdemucs model so it's cached in the image layer
-RUN python -c "from demucs.pretrained import get_model; get_model('htdemucs')" || true
+# Pre-download Demucs htdemucs_6s model so it's cached in the image layer
+RUN python -c "from demucs.pretrained import get_model; get_model('htdemucs_6s')" || true
 
 COPY src/ ./src/
 
