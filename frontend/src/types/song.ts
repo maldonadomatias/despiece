@@ -14,6 +14,8 @@ export interface Song {
 
 export type SubLabel = 'lead' | 'pad' | 'synth' | 'strings' | 'fx' | 'other_misc';
 
+export type AnalysisVersion = 1 | 2;
+
 export interface AnalysisResult {
   bpm: number;
   key: string;
@@ -22,7 +24,7 @@ export interface AnalysisResult {
   bar_grid: number[];
   sections: Section[];
   stems: Record<string, StemAnalysis>;
-  analysis_version: number;
+  analysis_version: AnalysisVersion;
 }
 
 export interface Section {
