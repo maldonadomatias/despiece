@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { fileTypeFromBuffer } from 'file-type';
-import { uploadFile, deleteFile, presignDownload } from '../services/storageService.js';
+import { uploadFile, deleteFile, deleteFilesByPrefix, presignDownload } from '../services/storageService.js';
 import * as songService from '../services/songService.js';
 import logger from '../utils/logger.js';
 
@@ -132,13 +132,17 @@ router.get('/:id/stems/:stem', async (req: Request, res: Response, next: NextFun
 // DELETE /api/songs/:id
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const storageKey = await songService.deleteSong(req.params.id);
+    const id = req.params.id;
+    const storageKey = await songService.deleteSong(id);
     if (!storageKey) {
       res.status(404).json({ error: 'Song not found' });
       return;
     }
     await deleteFile(storageKey).catch((err) =>
-      logger.warn({ err, storageKey }, 'Failed to delete from storage')
+      logger.warn({ err, storageKey }, 'Failed to delete original mix; continuing')
+    );
+    await deleteFilesByPrefix(`songs/${id}/`).catch((err) =>
+      logger.warn({ err, id }, 'Failed to delete stem prefix; continuing')
     );
     res.status(204).send();
   } catch (err) {

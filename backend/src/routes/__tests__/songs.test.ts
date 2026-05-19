@@ -135,3 +135,23 @@ describe('GET /api/songs/:id/stems/:stem', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('DELETE /api/songs/:id cleans up stems', () => {
+  it('calls deleteFile (original) and deleteFilesByPrefix (stems)', async () => {
+    const songService = await import('../../services/songService.js');
+    (songService.deleteSong as jest.Mock).mockResolvedValueOnce('songs/abc.mp3');
+
+    const storage = await import('../../services/storageService.js');
+    (storage.deleteFilesByPrefix as jest.Mock).mockClear();
+    (storage.deleteFile as jest.Mock).mockClear();
+    (storage.deleteFilesByPrefix as jest.Mock).mockResolvedValueOnce(undefined);
+    (storage.deleteFile as jest.Mock).mockResolvedValueOnce(undefined);
+
+    const res = await request(app).delete('/api/songs/abc');
+    expect(res.status).toBe(204);
+    expect((storage.deleteFile as jest.Mock).mock.calls[0][0]).toBe('songs/abc.mp3');
+    expect((storage.deleteFilesByPrefix as jest.Mock).mock.calls[0][0]).toBe(
+      'songs/abc/'
+    );
+  });
+});
