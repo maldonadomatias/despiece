@@ -1,9 +1,14 @@
 const mockSend = jest.fn().mockResolvedValue({});
 
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: jest.fn().mockResolvedValue('https://example.com/signed'),
+}));
+
 jest.mock('@aws-sdk/client-s3', () => ({
   S3Client: jest.fn().mockImplementation(() => ({
     send: mockSend,
   })),
+  GetObjectCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'GetObjectCommand' } })),
   PutObjectCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'PutObjectCommand' } })),
   DeleteObjectCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'DeleteObjectCommand' } })),
   DeleteObjectsCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'DeleteObjectsCommand' } })),
@@ -12,7 +17,7 @@ jest.mock('@aws-sdk/client-s3', () => ({
   CreateBucketCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'CreateBucketCommand' } })),
 }));
 
-import { uploadFile, deleteFile, deleteFilesByPrefix } from '../storageService.js';
+import { uploadFile, deleteFile, deleteFilesByPrefix, presignDownload } from '../storageService.js';
 
 beforeEach(() => {
   mockSend.mockResolvedValue({});
@@ -103,5 +108,12 @@ describe('deleteFilesByPrefix', () => {
 
     expect(listMock).toHaveBeenCalledTimes(1);
     expect(deleteMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('presignDownload', () => {
+  it('returns a signed URL', async () => {
+    const url = await presignDownload('songs/abc/stems/vocals.mp3', 60);
+    expect(url).toBe('https://example.com/signed');
   });
 });

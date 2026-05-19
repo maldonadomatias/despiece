@@ -1,5 +1,6 @@
 import {
   S3Client,
+  GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
@@ -7,6 +8,7 @@ import {
   HeadBucketCommand,
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import logger from '../utils/logger.js';
 
 function buildS3Client(): S3Client {
@@ -116,4 +118,12 @@ export async function deleteFilesByPrefix(prefix: string): Promise<void> {
 
     continuationToken = listResp.IsTruncated ? listResp.NextContinuationToken : undefined;
   } while (continuationToken);
+}
+
+export async function presignDownload(
+  key: string,
+  expiresInSec: number = 3600
+): Promise<string> {
+  const cmd = new GetObjectCommand({ Bucket: getBucket(), Key: key });
+  return getSignedUrl(getS3(), cmd, { expiresIn: expiresInSec });
 }
