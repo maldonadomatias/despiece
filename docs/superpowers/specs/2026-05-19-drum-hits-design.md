@@ -81,15 +81,23 @@ Returns onset timestamps in seconds. `backtrack=True` snaps each onset to the ne
 
 If `len(onset_times) == 0`, return five empty arrays.
 
-### Step 2 — Per-onset window
+### Step 2 — Per-onset windows
 
-For each onset at time `t`:
+Two windows per onset are needed: a short one for transient-driven features (energy ratios, centroid, ZCR) and a longer one for the decay measurement.
 
+**Short window** (transient features):
 - `start_samp = max(0, int((t - 0.010) * sr))`
 - `end_samp = min(len(audio), int((t + 0.050) * sr))`
-- `window = audio[start_samp:end_samp]`
+- `window_short = audio[start_samp:end_samp]`
 
-60ms wide. Captures the transient + early decay portion that distinguishes drum classes.
+60 ms wide. Captures the transient + early decay portion.
+
+**Long window** (decay only):
+- `decay_start = max(0, int(t * sr))`
+- `decay_end = min(len(audio), int((t + 0.400) * sr))`
+- `window_decay = audio[decay_start:decay_end]`
+
+400 ms wide. Long enough to measure cymbal decay (typically 200–1000 ms). If the next onset arrives sooner than 400 ms after `t`, the long window is trimmed to `min(decay_end, next_onset_samp)` so we don't read another hit's energy into this hit's decay.
 
 ### Step 3 — Feature vector
 
@@ -102,10 +110,10 @@ For each window:
 | `hi_energy` | sum(STFT magnitude where 6000 Hz ≤ f ≤ 12000 Hz) / total energy | high for HH and cymbal |
 | `centroid` | mean of `librosa.feature.spectral_centroid` over window | low for kick, mid for snare, high for HH/cymbal |
 | `zcr` | mean of `librosa.feature.zero_crossing_rate` over window | high for HH, lower for cymbal |
-| `decay_ms` | time in ms for RMS envelope to drop 6 dB from window peak; clamp to 60ms max if no clear decay | short for HH, long for cymbal |
-| `peak_rms` | max(`librosa.feature.rms(window)`); used for velocity | per-onset loudness |
+| `decay_ms` | computed on `window_decay`: time in ms for RMS envelope to drop 6 dB from peak. If no 6 dB drop within the window, treat decay as the window length (~400 ms). | short for HH (~30–60 ms), long for cymbal (~150 ms+) |
+| `peak_rms` | max(`librosa.feature.rms(window_short)`); used for velocity | per-onset loudness |
 
-All energy ratios use a single `librosa.stft(window, n_fft=512, hop_length=128)`. Centroid and ZCR use librosa's frame-level helpers and average over the resulting frames.
+The energy ratios, centroid, ZCR, and peak_rms all read `window_short`. Only `decay_ms` reads `window_decay`. Energy ratios use a single `librosa.stft(window_short, n_fft=512, hop_length=128)`. Centroid and ZCR use librosa's frame-level helpers and average over the resulting frames.
 
 ### Step 4 — Velocity normalization
 
@@ -394,7 +402,7 @@ All read at module-import time and documented in `audio-service/env.example`.
 3. **Synthetic hi-hat** — band-passed white noise (8–12 kHz) with `exp(-t/0.02)` (50 ms decay). High `hi_energy`, high `zcr`, low `decay_ms`. Expect `hihat`.
 4. **Synthetic cymbal** — same band but `exp(-t/0.15)` (300 ms decay). High `hi_energy`, lower `zcr`, high `decay_ms`. Expect `cymbal`.
 5. **Empty audio** → 5 empty arrays, no crash.
-6. **Confidence floor** — synthetic ambiguous hit (energy spread roughly evenly across bands) → confidence < 0.4 → `unknown`.
+6. **Confidence floor** — synthetic ambiguous hit (energy spread roughly evenly across bands AND short decay so it doesn't fall through to cymbal) → confidence < 0.4 → `unknown`.
 7. **Velocity ordering** — two synthetic kicks at different amplitudes → louder one has `velocity == 1.0`, softer one < 1.0.
 8. **Multi-class mix** — concatenate the four synthetic hits with 100 ms gaps → each lands in the right class array (4 hits total, 1 per class).
 
