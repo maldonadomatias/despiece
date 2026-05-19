@@ -28,3 +28,19 @@ def _merge_close(runs, gap_sec):
         else:
             merged.append((s, e))
     return merged
+
+
+def _build_bar_grid(beat_times, beats_per_bar, audio_duration):
+    if len(beat_times) < 2:
+        return [0.0, float(audio_duration)]
+    bars = [0.0]
+    bars.extend([float(beat_times[i]) for i in range(0, len(beat_times), beats_per_bar)])
+    if bars[-1] < audio_duration:
+        bars.append(float(audio_duration))
+    return bars
+
+
+def _snap(t, bar_grid):
+    if not bar_grid:
+        return float(t)
+    return float(min(bar_grid, key=lambda b: abs(b - t)))
