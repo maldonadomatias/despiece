@@ -1,4 +1,4 @@
-import { StemAnalysis } from '@/types/song';
+import { StemAnalysis, SubLabel } from '@/types/song';
 import { RegionBlock } from './RegionBlock';
 import { StemControls } from './StemControls';
 
@@ -16,6 +16,7 @@ interface Props {
   onRegionClick: (startSec: number) => void;
   labelWidth?: number;
   rowHeight?: number;
+  subLabelColors?: Record<SubLabel, string>;
 }
 
 export function StemTrack({
@@ -32,6 +33,7 @@ export function StemTrack({
   onRegionClick,
   labelWidth = 96,
   rowHeight = 48,
+  subLabelColors,
 }: Props) {
   return (
     <div
@@ -55,17 +57,23 @@ export function StemTrack({
         className="relative bg-muted/20 rounded overflow-hidden"
         style={{ width: timelineWidth, height: rowHeight }}
       >
-        {stem.regions.map((region, i) => (
-          <RegionBlock
-            key={i}
-            region={region}
-            durationSec={durationSec}
-            timelineWidth={timelineWidth}
-            color={color}
-            onClick={onRegionClick}
-            rowHeight={rowHeight}
-          />
-        ))}
+        {stem.regions.map((region, i) => {
+          const sub = name === 'other' ? region.sub_label : undefined;
+          const subColor = sub && subLabelColors ? subLabelColors[sub] : undefined;
+          return (
+            <RegionBlock
+              key={i}
+              region={region}
+              durationSec={durationSec}
+              timelineWidth={timelineWidth}
+              color={color}
+              onClick={onRegionClick}
+              rowHeight={rowHeight}
+              subLabel={sub}
+              subLabelColor={subColor}
+            />
+          );
+        })}
       </div>
     </div>
   );

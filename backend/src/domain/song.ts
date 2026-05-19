@@ -19,6 +19,10 @@ export interface SongAnalysis {
   created_at: string;
 }
 
+export type SubLabel = 'lead' | 'pad' | 'synth' | 'strings' | 'fx' | 'other_misc';
+
+export type AnalysisVersion = 1 | 2;
+
 export interface AnalysisResult {
   bpm: number;
   key: string;
@@ -27,6 +31,7 @@ export interface AnalysisResult {
   bar_grid: number[];
   sections: Section[];
   stems: Record<string, StemAnalysis>;
+  analysis_version: AnalysisVersion;
 }
 
 export interface Section {
@@ -44,4 +49,6 @@ export interface StemRegion {
   start_sec: number;
   end_sec: number;
   envelope: [number, number][]; // [t_relative_sec, energy_0_1]
+  sub_label?: SubLabel;
+  sub_label_confidence?: number;
 }
