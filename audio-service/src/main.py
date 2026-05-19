@@ -4,6 +4,7 @@ import traceback
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
+
 from .models import AnalyzeRequest
 from .storage import download_to_path, upload_from_path
 from .analysis.demucs_runner import separate_stems, STEMS
@@ -11,11 +12,41 @@ from .analysis.beat_analysis import detect_bpm_and_beats, detect_key
 from .analysis.segmentation import detect_sections
 from .analysis.regions import detect_regions
 from .analysis.mp3_encoder import encode_mp3
+from .analysis.ensemble import (
+    separate_roformer_vocals,
+    separate_roformer_bass,
+    free_model as ensemble_free_model,
+)
+from .analysis.residual import spectral_subtract
+from .analysis.tagging import tag_clip, free_model as tagging_free_model
+from .analysis.sub_label import collapse_to_sub_label
 
 app = FastAPI(title="Audio Analysis Service")
 
 BEATS_PER_BAR = 4
 STEM_MP3_BITRATE_KBPS = 128
+ANALYSIS_VERSION = 2
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    val = os.environ.get(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except Exception:
+        return default
+
+
+USE_ROFORMER_VOCALS = _env_flag("DESPIECE_USE_ROFORMER_VOCALS", True)
+USE_ROFORMER_BASS = _env_flag("DESPIECE_USE_ROFORMER_BASS", True)
+USE_RESIDUAL_SUBTRACT = _env_flag("DESPIECE_USE_RESIDUAL_SUBTRACT", True)
+USE_TAGGER = _env_flag("DESPIECE_USE_TAGGER", True)
+RESIDUAL_ALPHA = _env_float("DESPIECE_RESIDUAL_ALPHA", 0.5)
 
 
 @app.get("/health")
@@ -41,9 +72,45 @@ def analyze(req: AnalyzeRequest):
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Demucs failed: {e}")
 
+        if USE_ROFORMER_VOCALS:
+            try:
+                vocals_audio, vocals_sr = stems_data["vocals"]
+                vocals_v2 = separate_roformer_vocals(vocals_audio, vocals_sr)
+                stems_data["vocals"] = (vocals_v2, vocals_sr)
+            except Exception:
+                traceback.print_exc()
+            finally:
+                ensemble_free_model()
+
+        if USE_ROFORMER_BASS:
+            try:
+                bass_audio, bass_sr = stems_data["bass"]
+                bass_v2 = separate_roformer_bass(bass_audio, bass_sr)
+                stems_data["bass"] = (bass_v2, bass_sr)
+            except Exception:
+                traceback.print_exc()
+            finally:
+                ensemble_free_model()
+
+        if USE_RESIDUAL_SUBTRACT:
+            try:
+                bass_audio, bass_sr = stems_data["bass"]
+                for h in ("guitar", "piano"):
+                    h_audio, h_sr = stems_data[h]
+                    if h_sr != bass_sr:
+                        continue
+                    h_cleaned = spectral_subtract(
+                        h_audio, bass_audio, sr=h_sr, alpha=RESIDUAL_ALPHA
+                    )
+                    stems_data[h] = (h_cleaned, h_sr)
+            except Exception:
+                traceback.print_exc()
+
         all_audio = [audio for audio, _ in stems_data.values()]
         sr = next(iter(stems_data.values()))[1]
-        mix_mono: np.ndarray = np.mean(all_audio, axis=0) if all_audio else np.zeros(1)
+        mix_mono: np.ndarray = (
+            np.mean(all_audio, axis=0) if all_audio else np.zeros(1)
+        )
         duration_sec = len(mix_mono) / sr
 
         try:
@@ -77,14 +144,33 @@ def analyze(req: AnalyzeRequest):
                 audio_key = None
 
             try:
-                regions = detect_regions(audio, stem_sr, beat_grid, beats_per_bar=BEATS_PER_BAR)
+                regions = detect_regions(
+                    audio, stem_sr, beat_grid, beats_per_bar=BEATS_PER_BAR
+                )
             except Exception:
                 traceback.print_exc()
                 regions = []
 
+            if stem_name == "other" and USE_TAGGER and regions:
+                for region in regions:
+                    try:
+                        start = int(region["start_sec"] * stem_sr)
+                        end = int(region["end_sec"] * stem_sr)
+                        clip = audio[start:end]
+                        if clip.size == 0:
+                            continue
+                        tags = tag_clip(clip, sr=stem_sr, top_k=5)
+                        sub_label, confidence = collapse_to_sub_label(tags)
+                        region["sub_label"] = sub_label
+                        region["sub_label_confidence"] = round(float(confidence), 4)
+                    except Exception:
+                        traceback.print_exc()
+                tagging_free_model()
+
             stems[stem_name] = {"audio_key": audio_key, "regions": regions}
 
         return {
+            "analysis_version": ANALYSIS_VERSION,
             "bpm": bpm,
             "key": key,
             "duration_sec": round(duration_sec, 3),
@@ -98,7 +184,10 @@ def analyze(req: AnalyzeRequest):
 def _bar_grid_from_beats(beat_times, beats_per_bar, audio_duration):
     if len(beat_times) < 2:
         return [0.0, round(float(audio_duration), 3)]
-    bars = [round(float(beat_times[i]), 3) for i in range(0, len(beat_times), beats_per_bar)]
+    bars = [
+        round(float(beat_times[i]), 3)
+        for i in range(0, len(beat_times), beats_per_bar)
+    ]
     if bars[0] > 0.0:
         bars.insert(0, 0.0)
     if bars[-1] < audio_duration:
