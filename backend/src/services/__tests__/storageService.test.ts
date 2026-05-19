@@ -4,13 +4,15 @@ jest.mock('@aws-sdk/client-s3', () => ({
   S3Client: jest.fn().mockImplementation(() => ({
     send: mockSend,
   })),
-  PutObjectCommand: jest.fn().mockImplementation((input) => ({ input })),
-  DeleteObjectCommand: jest.fn().mockImplementation((input) => ({ input })),
-  HeadBucketCommand: jest.fn().mockImplementation((input) => ({ input })),
-  CreateBucketCommand: jest.fn().mockImplementation((input) => ({ input })),
+  PutObjectCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'PutObjectCommand' } })),
+  DeleteObjectCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'DeleteObjectCommand' } })),
+  DeleteObjectsCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'DeleteObjectsCommand' } })),
+  ListObjectsV2Command: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'ListObjectsV2Command' } })),
+  HeadBucketCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'HeadBucketCommand' } })),
+  CreateBucketCommand: jest.fn().mockImplementation((input) => ({ input, constructor: { name: 'CreateBucketCommand' } })),
 }));
 
-import { uploadFile, deleteFile } from '../storageService.js';
+import { uploadFile, deleteFile, deleteFilesByPrefix } from '../storageService.js';
 
 beforeEach(() => {
   mockSend.mockResolvedValue({});
@@ -45,5 +47,61 @@ describe('deleteFile', () => {
   it('rethrows on S3 error', async () => {
     mockSend.mockRejectedValueOnce(new Error('NoSuchKey'));
     await expect(deleteFile('test/song.mp3')).rejects.toThrow('NoSuchKey');
+  });
+});
+
+describe('deleteFilesByPrefix', () => {
+  it('lists then batch-deletes when objects exist', async () => {
+    const { ListObjectsV2Command, DeleteObjectsCommand } = await import('@aws-sdk/client-s3');
+    const listMock = ListObjectsV2Command as unknown as jest.Mock;
+    const deleteMock = DeleteObjectsCommand as unknown as jest.Mock;
+    listMock.mockClear();
+    deleteMock.mockClear();
+    mockSend.mockReset();
+
+    // First call: list returns two objects; second call: delete succeeds
+    mockSend
+      .mockResolvedValueOnce({
+        Contents: [
+          { Key: 'songs/abc/stems/vocals.mp3' },
+          { Key: 'songs/abc/stems/drums.mp3' },
+        ],
+        IsTruncated: false,
+      })
+      .mockResolvedValueOnce({ Deleted: [{ Key: 'songs/abc/stems/vocals.mp3' }] });
+
+    await deleteFilesByPrefix('songs/abc/');
+
+    expect(listMock).toHaveBeenCalledTimes(1);
+    expect(listMock).toHaveBeenCalledWith(
+      expect.objectContaining({ Prefix: 'songs/abc/' })
+    );
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+    expect(deleteMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        Delete: {
+          Objects: [
+            { Key: 'songs/abc/stems/vocals.mp3' },
+            { Key: 'songs/abc/stems/drums.mp3' },
+          ],
+        },
+      })
+    );
+  });
+
+  it('skips delete when no objects match prefix', async () => {
+    const { ListObjectsV2Command, DeleteObjectsCommand } = await import('@aws-sdk/client-s3');
+    const listMock = ListObjectsV2Command as unknown as jest.Mock;
+    const deleteMock = DeleteObjectsCommand as unknown as jest.Mock;
+    listMock.mockClear();
+    deleteMock.mockClear();
+    mockSend.mockReset();
+
+    mockSend.mockResolvedValueOnce({ Contents: [], IsTruncated: false });
+
+    await deleteFilesByPrefix('songs/missing/');
+
+    expect(listMock).toHaveBeenCalledTimes(1);
+    expect(deleteMock).not.toHaveBeenCalled();
   });
 });
