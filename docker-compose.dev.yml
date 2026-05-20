@@ -44,6 +44,17 @@ services:
       - S3_SECRET_KEY=minioadmin
       - S3_BUCKET=songs
       - S3_REGION=us-east-1
+      # Dev defaults: keep Demucs + cheap B1/B2 features ON, disable expensive
+      # Roformer ensemble + PANNs tagger. ~5-10 min/song instead of 30-60 min.
+      # Flip to true once Docker Desktop has 8+ GiB and you're ready for full quality.
+      - DESPIECE_USE_ROFORMER_VOCALS=false
+      - DESPIECE_USE_ROFORMER_BASS=false
+      - DESPIECE_USE_RESIDUAL_SUBTRACT=false
+      - DESPIECE_USE_TAGGER=false
+      - DESPIECE_USE_DRUM_HITS=true
+      - DESPIECE_USE_CHORDS=true
+      - DESPIECE_DEMUCS_SEGMENT_SEC=7.8
+      - DESPIECE_DEMUCS_OVERLAP=0.1
     command: ['uvicorn', 'src.main:app', '--host', '0.0.0.0', '--port', '8000']
     ports:
       - '8000:8000'
