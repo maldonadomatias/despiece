@@ -1,7 +1,16 @@
+import os
+
 import numpy as np
 
 # Stem order for htdemucs_6s
 STEMS = ["drums", "bass", "other", "vocals", "guitar", "piano"]
+
+# Demucs splits the mix into chunks of this length (seconds) before inference.
+# Smaller value → lower peak RAM at slight runtime cost. Default htdemucs_6s
+# segment is ~7.8s; 4.0s cuts the peak tensor footprint roughly in half so
+# the pipeline fits inside the 3.83 GiB Docker Desktop container limit.
+DEMUCS_SEGMENT_SEC = float(os.environ.get("DESPIECE_DEMUCS_SEGMENT_SEC", "4.0"))
+DEMUCS_OVERLAP = float(os.environ.get("DESPIECE_DEMUCS_OVERLAP", "0.1"))
 
 _model = None
 
@@ -38,7 +47,13 @@ def separate_stems(
     wav = wav.unsqueeze(0).to(device)  # (1, channels, samples)
 
     with torch.no_grad():
-        sources = apply_model(model, wav, device=device)[0]  # (4, channels, samples)
+        sources = apply_model(
+            model,
+            wav,
+            device=device,
+            segment=DEMUCS_SEGMENT_SEC,
+            overlap=DEMUCS_OVERLAP,
+        )[0]  # (4, channels, samples)
 
     results: dict[str, tuple[np.ndarray, int]] = {}
     for i, stem_name in enumerate(STEMS):
